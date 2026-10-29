@@ -22,7 +22,7 @@ function insertAtEndOfStatus(tasks, task) {
   ];
 }
 
-function moveTaskToStatus(tasks, taskId, status) {
+function moveTaskToStatus(tasks, taskId, status, changes = {}) {
   const task = tasks.find((currentTask) => currentTask.id === taskId);
 
   if (!task || task.status === status) {
@@ -30,10 +30,10 @@ function moveTaskToStatus(tasks, taskId, status) {
   }
 
   const remainingTasks = tasks.filter((currentTask) => currentTask.id !== taskId);
-  return insertAtEndOfStatus(remainingTasks, { ...task, status });
+  return insertAtEndOfStatus(remainingTasks, { ...task, ...changes, status });
 }
 
-function reorderTask(tasks, taskId, status, targetTaskId) {
+function reorderTask(tasks, taskId, status, targetTaskId, changes = {}) {
   const task = tasks.find((currentTask) => currentTask.id === taskId);
 
   if (!task || task.id === targetTaskId) {
@@ -41,7 +41,7 @@ function reorderTask(tasks, taskId, status, targetTaskId) {
   }
 
   const remainingTasks = tasks.filter((currentTask) => currentTask.id !== taskId);
-  const taskToInsert = { ...task, status };
+  const taskToInsert = { ...task, ...changes, status };
 
   if (!targetTaskId) {
     return insertAtEndOfStatus(remainingTasks, taskToInsert);
@@ -62,6 +62,9 @@ function reorderTask(tasks, taskId, status, targetTaskId) {
 
 export function taskReducer(tasks, action) {
   switch (action.type) {
+    case 'tasks/replaced':
+      return action.tasks;
+
     case 'task/added':
       return [...tasks, action.task];
 
@@ -75,10 +78,10 @@ export function taskReducer(tasks, action) {
       return tasks.filter((task) => task.id !== action.taskId);
 
     case 'task/moved':
-      return moveTaskToStatus(tasks, action.taskId, action.status);
+      return moveTaskToStatus(tasks, action.taskId, action.status, action.changes);
 
     case 'task/reordered':
-      return reorderTask(tasks, action.taskId, action.status, action.targetTaskId);
+      return reorderTask(tasks, action.taskId, action.status, action.targetTaskId, action.changes);
 
     default:
       return tasks;

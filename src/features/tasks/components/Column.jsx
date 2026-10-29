@@ -1,39 +1,59 @@
 import TaskCard from './TaskCard.jsx';
 
-function Column({ column, tasks, isFiltered, onAddTask, onEditTask, onDeleteTask, onMoveTask, onDropTask }) {
+function Column({
+  column,
+  tasks,
+  isFiltered,
+  onAddTask,
+  onEditTask,
+  onDeleteTask,
+  onMoveTask,
+  onDropTask,
+  canAddTask = false,
+  canManageTasks = false,
+  canMoveTasks = false,
+  canReorderTasks = false,
+}) {
   function handleDrop(event) {
-    event.preventDefault();
     const taskId = event.dataTransfer.getData('text/task-id');
+    const sourceStatus = event.dataTransfer.getData('text/task-status');
+    const canDrop = sourceStatus === column.id ? canReorderTasks : canMoveTasks;
 
-    if (taskId) {
+    if (taskId && canDrop) {
+      event.preventDefault();
       onDropTask(taskId, column.id);
     }
   }
 
   return (
-    <section className="kanban-column" aria-labelledby={`column-${column.id}`}>
+    <section className={`kanban-column kanban-column--${column.id}`} aria-labelledby={`column-${column.id}`}>
       <header className="column-header">
-        <div>
+        <div className="column-title">
+          <span className="column-status-dot" aria-hidden="true" />
           <h2 id={`column-${column.id}`}>{column.title}</h2>
-          <span className="column-count">{tasks.length} {tasks.length === 1 ? 'tarefa' : 'tarefas'}</span>
         </div>
-        <button className="add-task-button" type="button" onClick={() => onAddTask(column.id)} aria-label={`Adicionar tarefa em ${column.title}`}>
-          +
-        </button>
+        <span className="column-count" aria-label={`${tasks.length} ${tasks.length === 1 ? 'tarefa' : 'tarefas'}`}>
+          {tasks.length}
+        </span>
       </header>
 
       <div
         className="column-tasks"
-        onDragOver={(event) => event.preventDefault()}
+        onDragOver={(event) => {
+          const sourceStatus = event.dataTransfer.getData('text/task-status');
+          if (sourceStatus === column.id ? canReorderTasks : canMoveTasks) {
+            event.preventDefault();
+          }
+        }}
         onDrop={handleDrop}
         aria-label={`Tarefas em ${column.title}`}
       >
         {tasks.length === 0 ? (
-          <button className="empty-column" type="button" onClick={() => onAddTask(column.id)}>
-            <span>+</span>
+          <div className="empty-column" role="status">
+            <span aria-hidden="true">{isFiltered ? '⌕' : '+'}</span>
             <strong>{isFiltered ? 'Nenhuma tarefa encontrada' : 'Nenhuma tarefa'}</strong>
-            <small>{isFiltered ? 'Ajuste os filtros' : 'Adicione uma tarefa aqui'}</small>
-          </button>
+            <small>{isFiltered ? 'Ajuste os filtros' : canAddTask ? 'Adicione uma tarefa aqui' : 'Nenhuma atribuição nesta etapa'}</small>
+          </div>
         ) : (
           tasks.map((task) => (
             <TaskCard
@@ -43,10 +63,23 @@ function Column({ column, tasks, isFiltered, onAddTask, onEditTask, onDeleteTask
               onDelete={onDeleteTask}
               onMove={onMoveTask}
               onDropTask={onDropTask}
+              canEdit={canManageTasks}
+              canDelete={canManageTasks}
+              canMove={canMoveTasks}
+              canReorder={canReorderTasks}
             />
           ))
         )}
       </div>
+
+      {canAddTask && (
+        <footer className="column-footer">
+          <button className="column-add-button" type="button" onClick={() => onAddTask(column.id)}>
+            <span aria-hidden="true">+</span>
+            Adicionar tarefa
+          </button>
+        </footer>
+      )}
     </section>
   );
 }

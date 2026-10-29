@@ -6,6 +6,7 @@
   "homepage": "https://mrjoaocosta21.github.io/Kanban",
   "scripts": {
     "dev": "vite",
+    "test": "node --test",
     "build": "vite build",
     "preview": "vite preview",
     "deploy": "npm run build && gh-pages -d dist"
