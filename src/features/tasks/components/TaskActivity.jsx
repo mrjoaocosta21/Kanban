@@ -30,7 +30,7 @@ function getActivityLabel(activity) {
   }
 }
 
-function TaskActivity({ activity = [] }) {
+function TaskActivity({ activity = [], members = [] }) {
   if (activity.length === 0) {
     return null;
   }
@@ -43,7 +43,10 @@ function TaskActivity({ activity = [] }) {
       <ol>
         {latestFirst.map((item) => (
           <li key={item.id}>
-            <span><strong>{getAssigneeById(item.actorId).name}</strong> {getActivityLabel(item)}</span>
+            <span>
+              <strong>{members.find((member) => member.id === item.actorId)?.name ?? getAssigneeById(item.actorId).name}</strong>
+              {' '}{getActivityLabel(item)}
+            </span>
             <time dateTime={item.at}>{formatActivityDate(item.at)}</time>
           </li>
         ))}

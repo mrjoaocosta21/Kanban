@@ -70,7 +70,7 @@ export function useTaskBoard(repository = localStorageTaskRepository) {
     };
   }, [reloadToken, repository]);
 
-  const commit = useCallback((action) => {
+  const commit = useCallback((action, command = null) => {
     const currentTasks = tasksRef.current;
     const nextTasks = taskReducer(currentTasks, action);
 
@@ -88,11 +88,18 @@ export function useTaskBoard(repository = localStorageTaskRepository) {
 
     const persistenceOperation = persistenceQueueRef.current
       .catch(() => undefined)
-      .then(() => repository.save(nextTasks))
-      .then(() => {
-        persistedTasksRef.current = nextTasks;
+      .then(() => (
+        command && typeof repository.apply === 'function'
+          ? repository.apply(command)
+          : repository.save(nextTasks).then(() => ({ tasks: nextTasks }))
+      ))
+      .then((result) => {
+        const persistedTasks = result?.tasks ?? nextTasks;
+        persistedTasksRef.current = persistedTasks;
 
         if (isMountedRef.current && latestOperationIdRef.current === operationId) {
+          tasksRef.current = persistedTasks;
+          dispatch({ type: 'tasks/replaced', tasks: persistedTasks });
           setError(null);
         }
 
@@ -132,24 +139,25 @@ export function useTaskBoard(repository = localStorageTaskRepository) {
     assertTaskAccess({ member, action: TASK_ACTIONS.CREATE });
     const timestamp = new Date().toISOString();
     const activity = createTaskActivity(TASK_ACTIVITY_TYPES.CREATED, member.id, {}, timestamp);
+    const task = {
+      id: createId('task'),
+      title,
+      date,
+      status,
+      priority,
+      assigneeId,
+      createdById: member.id,
+      createdAt: timestamp,
+      updatedById: member.id,
+      updatedAt: timestamp,
+      tags: tags.map((tag) => ({ ...tag, id: createId('tag') })),
+      activity: [activity],
+    };
 
     return commit({
       type: 'task/added',
-      task: {
-        id: createId('task'),
-        title,
-        date,
-        status,
-        priority,
-        assigneeId,
-        createdById: member.id,
-        createdAt: timestamp,
-        updatedById: member.id,
-        updatedAt: timestamp,
-        tags: tags.map((tag) => ({ ...tag, id: createId('tag') })),
-        activity: [activity],
-      },
-    });
+      task,
+    }, { type: 'task/create', task });
   }, [commit]);
 
   const updateTask = useCallback(
@@ -170,16 +178,18 @@ export function useTaskBoard(repository = localStorageTaskRepository) {
         timestamp,
       );
 
+      const optimisticChanges = {
+        ...changes,
+        updatedById: member.id,
+        updatedAt: timestamp,
+        activity: appendTaskActivity(task, activity),
+      };
+
       return commit({
         type: 'task/updated',
         taskId,
-        changes: {
-          ...changes,
-          updatedById: member.id,
-          updatedAt: timestamp,
-          activity: appendTaskActivity(task, activity),
-        },
-      });
+        changes: optimisticChanges,
+      }, { type: 'task/update', task, changes });
     },
     [commit],
   );
@@ -188,7 +198,10 @@ export function useTaskBoard(repository = localStorageTaskRepository) {
     (taskId, member) => {
       const task = tasksRef.current.find((item) => item.id === taskId);
       assertTaskAccess({ member, action: TASK_ACTIONS.DELETE, task });
-      return commit({ type: 'task/deleted', taskId });
+      return commit(
+        { type: 'task/deleted', taskId },
+        { type: 'task/delete', task },
+      );
     },
     [commit],
   );
@@ -217,7 +230,7 @@ export function useTaskBoard(repository = localStorageTaskRepository) {
           updatedAt: timestamp,
           activity: appendTaskActivity(task, activity),
         },
-      });
+      }, { type: 'task/move', task, status });
     },
     [commit],
   );
@@ -254,7 +267,7 @@ export function useTaskBoard(repository = localStorageTaskRepository) {
           updatedAt: timestamp,
           activity: appendTaskActivity(task, activity),
         },
-      });
+      }, { type: 'task/move', task, status, targetTaskId });
     },
     [commit],
   );
@@ -262,7 +275,10 @@ export function useTaskBoard(repository = localStorageTaskRepository) {
   const replaceTasks = useCallback(
     (nextTasks, member) => {
       assertTaskAccess({ member, action: TASK_ACTIONS.IMPORT });
-      return commit({ type: 'tasks/replaced', tasks: nextTasks });
+      return commit(
+        { type: 'tasks/replaced', tasks: nextTasks },
+        { type: 'tasks/replace', tasks: nextTasks },
+      );
     },
     [commit],
   );

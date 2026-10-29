@@ -13,6 +13,7 @@ function Column({
   canManageTasks = false,
   canMoveTasks = false,
   canReorderTasks = false,
+  members = [],
 }) {
   function handleDrop(event) {
     const taskId = event.dataTransfer.getData('text/task-id');
@@ -67,6 +68,7 @@ function Column({
               canDelete={canManageTasks}
               canMove={canMoveTasks}
               canReorder={canReorderTasks}
+              members={members}
             />
           ))
         )}

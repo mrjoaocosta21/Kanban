@@ -14,9 +14,11 @@ function TaskCard({
   canDelete = false,
   canMove = false,
   canReorder = false,
+  members = [],
 }) {
   const [isDropTarget, setIsDropTarget] = useState(false);
-  const assignee = getAssigneeById(task.assigneeId);
+  const assignee = members.find((member) => member.id === task.assigneeId)
+    ?? getAssigneeById(task.assigneeId);
 
   function handleDragStart(event) {
     event.dataTransfer.effectAllowed = 'move';
@@ -117,7 +119,7 @@ function TaskCard({
         )}
       </footer>
 
-      <TaskActivity activity={task.activity} />
+      <TaskActivity activity={task.activity} members={members} />
     </article>
   );
 }

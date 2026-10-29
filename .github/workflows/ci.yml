@@ -12,6 +12,24 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: kanban_test
+          POSTGRES_USER: kanban
+          POSTGRES_PASSWORD: kanban
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kanban -d kanban_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgres://kanban:kanban@localhost:5432/kanban_test
+      RUN_HTTP_TESTS: "true"
 
     steps:
       - name: Checkout
@@ -28,6 +46,9 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+      - name: Run static analysis
+        run: npm run lint
 
       - name: Build application
         run: npm run build

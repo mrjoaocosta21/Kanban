@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
-  getAssigneeById,
   TASK_ASSIGNEES,
   TASK_COLUMNS,
   TASK_PRIORITIES,
@@ -20,14 +19,27 @@ import {
 } from '../taskAccess.js';
 import { useTaskBoard } from '../hooks/useTaskBoard.js';
 import { useWorkspaceSession } from '../hooks/useWorkspaceSession.js';
+import UserMenu from '../../auth/components/UserMenu.jsx';
 import BoardProgress from './BoardProgress.jsx';
 import Column from './Column.jsx';
 import SessionSwitcher from './SessionSwitcher.jsx';
 import TaskForm from './TaskForm.jsx';
 import Toast from './Toast.jsx';
 
-function Board() {
-  const { currentMember, switchMember } = useWorkspaceSession();
+function getMemberById(members, memberId) {
+  return members.find((member) => member.id === memberId) ?? TASK_ASSIGNEES[0];
+}
+
+function Board({
+  repository,
+  currentMember: authenticatedMember = null,
+  members = TASK_ASSIGNEES,
+  workspaceName = 'React Kanban',
+  isLoggingOut = false,
+  onLogout,
+}) {
+  const demoSession = useWorkspaceSession();
+  const currentMember = authenticatedMember ?? demoSession.currentMember;
   const {
     tasks,
     addTask,
@@ -44,7 +56,7 @@ function Board() {
     clearError,
     dismissWarning,
     reloadTasks,
-  } = useTaskBoard();
+  } = useTaskBoard(repository);
   const [dialog, setDialog] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [tagFilter, setTagFilter] = useState('');
@@ -56,6 +68,8 @@ function Board() {
   const feedbackId = useRef(0);
   const importInputRef = useRef(null);
   const managerView = isManager(currentMember);
+  const authenticatedSession = Boolean(authenticatedMember);
+  const canImportBackup = managerView && repository?.supportsImport !== false;
 
   const showFeedback = useCallback((message) => {
     feedbackId.current += 1;
@@ -233,7 +247,7 @@ function Board() {
       const matchesSearch = !normalizedSearch || [
         task.title,
         task.date,
-        getAssigneeById(task.assigneeId).name,
+        getMemberById(members, task.assigneeId).name,
         ...task.tags.map((tag) => tag.name),
       ].some((value) => value.toLowerCase().includes(normalizedSearch));
 
@@ -243,7 +257,7 @@ function Board() {
 
       return matchesSearch && matchesTag && matchesPriority && matchesAssignee;
     });
-  }, [accessibleTasks, assigneeFilter, priorityFilter, searchTerm, tagFilter]);
+  }, [accessibleTasks, assigneeFilter, members, priorityFilter, searchTerm, tagFilter]);
 
   const filtersActive = Boolean(searchTerm || tagFilter || priorityFilter || assigneeFilter);
   const completedTasks = accessibleTasks.filter((task) => task.status === TASK_STATUSES.DONE).length;
@@ -260,8 +274,8 @@ function Board() {
     error: 'Erro de persistência',
     loading: 'Carregando dados',
     saving: 'Salvando alterações',
-    saved: 'Salvo neste dispositivo',
-    offline: 'Offline · dados locais',
+    saved: authenticatedSession ? 'Sincronizado com o servidor' : 'Salvo neste dispositivo',
+    offline: authenticatedSession ? 'Offline · conexão necessária' : 'Offline · dados locais',
   }[syncState];
 
   return (
@@ -271,21 +285,29 @@ function Board() {
           <div className="board-heading">
             <div className="app-mark" aria-hidden="true">✓</div>
             <div>
-              <p className="app-eyebrow">Workspace · React Kanban</p>
+              <p className="app-eyebrow">Workspace · {workspaceName}</p>
               <h1 id="app-title">Lista de afazeres</h1>
               <p className="board-description">Organize prioridades, responsáveis e entregas em um só lugar.</p>
             </div>
           </div>
           <div className="board-header__actions">
-            <SessionSwitcher
-              currentMember={currentMember}
-              onChange={(memberId) => {
-                switchMember(memberId);
-                setAssigneeFilter('');
-                setPermissionError(null);
-                closeDialog();
-              }}
-            />
+            {authenticatedSession ? (
+              <UserMenu
+                member={currentMember}
+                isSubmitting={isLoggingOut}
+                onLogout={onLogout}
+              />
+            ) : (
+              <SessionSwitcher
+                currentMember={currentMember}
+                onChange={(memberId) => {
+                  demoSession.switchMember(memberId);
+                  setAssigneeFilter('');
+                  setPermissionError(null);
+                  closeDialog();
+                }}
+              />
+            )}
             <span className={`sync-status sync-status--${syncState}`} role="status" aria-live="polite">
               <span aria-hidden="true" />
               {syncLabel}
@@ -300,14 +322,16 @@ function Board() {
                 >
                   Exportar
                 </button>
-                <button
-                  className="button button--ghost"
-                  type="button"
-                  onClick={() => importInputRef.current?.click()}
-                  disabled={isLoading || isSaving}
-                >
-                  Importar
-                </button>
+                {canImportBackup && (
+                  <button
+                    className="button button--ghost"
+                    type="button"
+                    onClick={() => importInputRef.current?.click()}
+                    disabled={isLoading || isSaving}
+                  >
+                    Importar
+                  </button>
+                )}
               </>
             )}
             <input
@@ -418,7 +442,7 @@ function Board() {
                     <label className="sr-only" htmlFor="assignee-filter">Filtrar por responsável</label>
                     <select id="assignee-filter" value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)}>
                       <option value="">Todos os responsáveis</option>
-                      {TASK_ASSIGNEES.map((assignee) => (
+                      {members.map((assignee) => (
                         <option value={assignee.id} key={assignee.id}>{assignee.name}</option>
                       ))}
                     </select>
@@ -474,10 +498,11 @@ function Board() {
                     onDeleteTask={handleDeleteTask}
                     onMoveTask={handleMoveTask}
                     onDropTask={handleReorderTask}
-                    canAddTask={managerView}
-                    canManageTasks={managerView}
-                    canMoveTasks
-                    canReorderTasks={managerView}
+                    canAddTask={managerView && !isSaving}
+                    canManageTasks={managerView && !isSaving}
+                    canMoveTasks={!isSaving}
+                    canReorderTasks={managerView && !isSaving}
+                    members={members}
                   />
                 ))}
               </div>
@@ -495,6 +520,7 @@ function Board() {
               task={dialog.task}
               initialStatus={dialog.status}
               isSubmitting={isSaving}
+              assignees={members}
               onCancel={closeDialog}
               onSubmit={handleFormSubmit}
             />

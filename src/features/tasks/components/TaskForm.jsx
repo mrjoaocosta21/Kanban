@@ -25,12 +25,20 @@ function textToTags(value, currentTags = []) {
     }));
 }
 
-function TaskForm({ task, initialStatus, isSubmitting = false, onCancel, onSubmit }) {
+function TaskForm({
+  task,
+  initialStatus,
+  assignees = TASK_ASSIGNEES,
+  isSubmitting = false,
+  onCancel,
+  onSubmit,
+}) {
+  const defaultAssigneeId = assignees[0]?.id ?? DEFAULT_ASSIGNEE_ID;
   const [title, setTitle] = useState(task?.title ?? '');
   const [date, setDate] = useState(task?.date ?? '');
   const [status, setStatus] = useState(task?.status ?? initialStatus ?? TASK_STATUSES.TODO);
   const [priority, setPriority] = useState(task?.priority ?? TASK_PRIORITIES.MEDIUM);
-  const [assigneeId, setAssigneeId] = useState(task?.assigneeId ?? DEFAULT_ASSIGNEE_ID);
+  const [assigneeId, setAssigneeId] = useState(task?.assigneeId ?? defaultAssigneeId);
   const [tags, setTags] = useState(tagsToText(task?.tags));
   const [error, setError] = useState('');
 
@@ -39,10 +47,10 @@ function TaskForm({ task, initialStatus, isSubmitting = false, onCancel, onSubmi
     setDate(task?.date ?? '');
     setStatus(task?.status ?? initialStatus ?? TASK_STATUSES.TODO);
     setPriority(task?.priority ?? TASK_PRIORITIES.MEDIUM);
-    setAssigneeId(task?.assigneeId ?? DEFAULT_ASSIGNEE_ID);
+    setAssigneeId(task?.assigneeId ?? defaultAssigneeId);
     setTags(tagsToText(task?.tags));
     setError('');
-  }, [task, initialStatus]);
+  }, [defaultAssigneeId, task, initialStatus]);
 
   function handleSubmit(event) {
     event.preventDefault();
@@ -107,7 +115,7 @@ function TaskForm({ task, initialStatus, isSubmitting = false, onCancel, onSubmi
         <div className="form-field">
           <label htmlFor="task-assignee">Responsável</label>
           <select id="task-assignee" value={assigneeId} onChange={(event) => setAssigneeId(event.target.value)} disabled={isSubmitting}>
-            {TASK_ASSIGNEES.map((assignee) => (
+            {assignees.map((assignee) => (
               <option value={assignee.id} key={assignee.id}>
                 {assignee.name} · {assignee.role}
               </option>
